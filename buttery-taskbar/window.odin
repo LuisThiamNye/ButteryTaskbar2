@@ -38,10 +38,12 @@ setup_window :: proc(state: ^State) {
 	if lib==nil {panic("failed to load User32.dll")}
 	RegisterShellHookWindow := cast(proc(win.HWND) -> b32) GetProcAddress(lib, "RegisterShellHookWindow")
 	if RegisterShellHookWindow == nil {
-		panic("failed to load RegisterShellHookWindow")
+		msg := "failed to load RegisterShellHookWindow"
+		log(msg)
+		panic(msg)
 	}
 	if !RegisterShellHookWindow(hwnd) {
-		fmt.println("failed to register window for shell events")
+		log("Failed to register window for shell events")
 		return
 	}
 }
@@ -100,7 +102,7 @@ is_system_app_dark_mode_enabled :: proc() -> bool {
 	// Dynamically link because this API is undocumented
   hUxTheme := LoadLibraryW(utf8_to_wstring("uxtheme.dll"))
   if hUxTheme == nil {
-      fmt.println("error: uxtheme.dll not found.")
+      log("error: uxtheme.dll not found.")
       return false
   }
   defer FreeLibrary(hUxTheme)
@@ -109,7 +111,7 @@ is_system_app_dark_mode_enabled :: proc() -> bool {
 	}
   prc := (proc "stdcall" () -> bool)(GetProcAddress(hUxTheme, cstring(MAKEINTRESOURCEA(132))))
   if prc == nil {
-      fmt.println("error: ShouldAppsUseDarkMode not found.")
+      log("error: ShouldAppsUseDarkMode not found.")
       return false;
   }
 
@@ -157,11 +159,13 @@ handle_window_message :: proc "stdcall" (hwnd: win.HWND, msg: win.UINT,
 			// ShowWindow(hwnd, SW_RESTORE)
 			// SetForegroundWindow(hwnd)
 
+			log("Exit by tray icon")
 	    PostQuitMessage(0)
 	    cleanup_program(state)
 		}
 
 	case WM_DESTROY:
+		log("WM_DESTROY")
 		Shell_NotifyIconW(NIM_DELETE, &notify_icon_data)
     PostQuitMessage(0)
     cleanup_program(state)
@@ -173,6 +177,7 @@ handle_window_message :: proc "stdcall" (hwnd: win.HWND, msg: win.UINT,
 			// case HSHELL_FLASH: // The orange taskbar icon flash
 
 			case HSHELL_WINDOWACTIVATED:
+				log("HSHELL_WINDOWACTIVATED")
 				refresh_taskbar_state(state)
 				set_taskbar_visibility(state)
 
@@ -187,7 +192,7 @@ handle_window_message :: proc "stdcall" (hwnd: win.HWND, msg: win.UINT,
 					// class TopLevelWindowForOverflowXamlIsland is used for the tray overflow menu
 					// class XamlExplorerHostIslandWindow is used for task view
 					class_name_str, _ := get_window_class_name(activated_window)
-					// fmt.println("Activated (nil):", class_name_str)
+					log("Activated (nil):", class_name_str)
 					if (
 						class_name_str == "Shell_TrayWnd" ||
 						class_name_str == "TopLevelWindowForOverflowXamlIsland" ||
@@ -201,7 +206,7 @@ handle_window_message :: proc "stdcall" (hwnd: win.HWND, msg: win.UINT,
 					// start menu corresponds to window class of Windows.UI.Core.CoreWindow, but is also used for things like notification and action centre
 					// Could be more reliably identified as the exe is SearchHost.exe
 					class_name_str, _ := get_window_class_name(activated_window)
-					// fmt.println("Activated:", class_name_str)
+					log("Activated:", class_name_str)
 					if class_name_str == "Windows.UI.Core.CoreWindow" {
 						state.core_windows[activated_window] = nil
 					}

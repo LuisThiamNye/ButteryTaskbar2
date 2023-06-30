@@ -27,6 +27,7 @@ global_state: ^State
 run_program :: proc(state: ^State) {
 	using win
 
+	init_logger()
 	pressed_keys = new([32]u8)
 	global_state = state
 	state.is_enabled = true
@@ -127,12 +128,14 @@ keyboard_hook_proc :: proc "stdcall" (ncode: i32, wparam: win.WPARAM, lparam: wi
 						global_state.is_enabled = true
 						refresh_taskbar_state(global_state)
 					}
+					log("Set enabled state:", global_state.is_enabled)
 					set_taskbar_visibility(global_state)
 					return 1
 				}
 			} else if mods=={.win, .shift} {
 				#partial switch vk {
 				case .f11: // exit the program
+					log("Exit by shortcut")
 					exit_program(global_state)
 					return 1
 				}

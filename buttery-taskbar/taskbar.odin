@@ -31,6 +31,7 @@ taskbar_thread_proc :: proc(state: ^State) {
 	using win
 	for {
 		sync.wait(&state.taskbar_thread_sema)
+		log("Woke up taskbar thread.")
 
 		refresh_taskbars(state)
 
@@ -39,8 +40,11 @@ taskbar_thread_proc :: proc(state: ^State) {
 			failed := false
 			should_show_taskbar := state.should_show_taskbar || state.is_win_key_down || time.diff(time.now(), state.should_stay_visible_before) > 0
 			for hwnd, i in state.taskbar_hwnds {
-				ShowWindow(hwnd, should_show_taskbar ? SW_SHOWNOACTIVATE : SW_HIDE)
-				failed = should_show_taskbar != bool(IsWindowVisible(hwnd))
+				previously_shown := ShowWindow(hwnd, should_show_taskbar ? SW_SHOWNOACTIVATE : SW_HIDE)
+				actually_shown := bool(IsWindowVisible(hwnd))
+				log("Set taskbar visibility:", previously_shown, "->", should_show_taskbar,
+					"(actual:", actually_shown, "; win:", state.is_win_key_down, "; state:", state.should_show_taskbar, "; n:", n_attempts, ")")
+				failed = should_show_taskbar != actually_shown
 			}
 			if time.diff(time.now(), state.should_stay_visible_before) > 0 {
 				// keep polling until the time is up
@@ -49,7 +53,7 @@ taskbar_thread_proc :: proc(state: ^State) {
 			} else if failed {
 				// This rarely happens
 				time.sleep(10*time.Millisecond)
-				// fmt.println("Retry!")
+				log("Retry!")
 			} else if should_show_taskbar {
 				break // making and keeping the taskbar visible usually isn't a problem
 			} else {
@@ -58,7 +62,6 @@ taskbar_thread_proc :: proc(state: ^State) {
 				n_attempts += 8
 			}
 		}
-		// fmt.println("Taskbar", state.should_show_taskbar ? "SHOW" : "HIDE")
 	}
 }
 
