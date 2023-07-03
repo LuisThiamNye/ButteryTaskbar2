@@ -2,6 +2,8 @@
 
 Save space on your screen by hiding the taskbar when it's not needed. This goes beyond the built-in auto-hide feature; it prevents the taskbar being shown by the mouse cursor. To reveal the taskbar, press the Windows key to open the Start menu.
 
+**New:** Don't want to use the keyboard? Now you can scroll with the mouse at the bottom of the screen to show the Start menu as well!
+
 This is the successor to the original [Buttery Taskbar](https://github.com/CrypticButter/ButteryTaskbar) where you will find further rationale for this program. Version 2 has lower CPU and memory usage, and should work more reliably overall.
 
 ## Features and behaviour
@@ -9,6 +11,7 @@ This is the successor to the original [Buttery Taskbar](https://github.com/Crypt
 - The taskbar is shown under these conditions:
 	- Holding down the Windows key.
 	- The Start menu or other special windows like the tray overflow window, notification area, action centre, or task view are active.
+- Scroll at the bottom edge of the primary monitor to open the Start menu.
 - Enable or disable functionality with the shortcut: `Ctrl` + `Win` + `F11`
 - Tray icon. Click it (left or right) to close the program.
 
