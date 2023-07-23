@@ -1,4 +1,7 @@
 .build
+.vs
+*.rdbg
 *.exe
 *.obj
 *.pdb
+local_environment.jai

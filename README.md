@@ -11,9 +11,9 @@ This is the successor to the original [Buttery Taskbar](https://github.com/Crypt
 - The taskbar is shown under these conditions:
 	- Holding down the Windows key.
 	- The Start menu or other special windows like the tray overflow window, notification area, action centre, or task view are active.
-- Scroll at the bottom edge of the primary monitor to open the Start menu.
-- Enable or disable functionality with the shortcut: `Ctrl` + `Win` + `F11`
-- Tray icon. Click it (left or right) to close the program.
+- Scroll at the bottom edge of the primary monitor to open the Start menu (optional).
+- Tray icon for accessing the settings menu, which also shows available software updates.
+- Enable or disable functionality with the shortcut: `Ctrl` + `Win` + `F11` (optional, disabled by default).
 
 ## Installation
 
@@ -21,14 +21,24 @@ The program is provided as a single executable and no installer. [Download it he
 
 **Make sure to set the taskbar to auto-hide in Windows Settings** (otherwise you'll end up with a large unusable gap).
 
-If you want it to run at log-in, create an entry in Task Scheduler to do that. There are plenty of instructions online for how to make a program run at log-in with Task Scheduler.
+If you want it to run at log-in, I recommend creating an entry in Task Scheduler. There are plenty of instructions online for how to make a program run at log-in with Task Scheduler.
 
 Important: In the properties window of the Task Scheduler entry you create for Buttery Taskbar:
 - In the "General" tab, **check** "Run with highest privileges". This means Buttery Taskbar can work when you are using apps ran as administrator.
 - In the "Conditions" tab, consider **uncheck**ing "Start the task only if the computer is on AC power" (for laptops).
 - In the "Settings" tab, **uncheck** "Stop the task if it runs longer than".
 
+You might notice that in Buttery Taskbar's tray menu, there is a "start at log-in" option. Keep this turned off if you followed the above steps. Unlike the Task Scheduler method, this option will not start Buttery Taskbar as administrator, and hence Buttery Taskbar will not work properly when the current focused window is running as administrator.
+
 ## Further details
 
 - The taskbar's visibility is updated each time you switch focus between windows (including opening the Start menu).
 - There is intentionally a short delay after releasing the Windows key before the taskbar is allowed to hide again.
+
+## Donations
+
+Bitcoin: `bc1qhgfyn3f2c56xwmsalekfntkxjgj6t73dt4ymjj`
+
+Ethereum: `0x8AABE26364304267537da5fa956081a6925D2e40`
+
+Cardano: `addr1q85zwgetxpru4g6fyvsz4h292mwaru2we22u8xckwv8yqrmgrzy93wur7z4zzmhj8eyr3dw5dyj97crvvxafdxjddags6xgeef`

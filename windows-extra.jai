@@ -13,6 +13,26 @@ MAKEINTRESOURCEW :: inline (i: u32) -> *u16 { return cast(*u16)i; }
 
 IDI_APPLICATION := cast(*void) 32512;
 
+LoadImageW :: (hInst: HINSTANCE, name: LPCWSTR, type: u32, cx: s32, cy: s32, fuLoad: u32 ) -> HANDLE #foreign user32;
+
+IMAGE_BITMAP :: 0;
+IMAGE_ICON :: 1;
+IMAGE_CURSOR :: 2;
+IMAGE_ENHMETAFILE :: 3;
+
+LR_DEFAULTCOLOR :: 0x0000;
+LR_MONOCHROME :: 0x0001;
+LR_COLOR :: 0x0002;
+LR_COPYRETURNORG :: 0x0004;
+LR_COPYDELETEORG :: 0x0008;
+LR_LOADFROMFILE :: 0x0010;
+LR_LOADTRANSPARENT :: 0x0020;
+LR_DEFAULTSIZE :: 0x0040;
+LR_VGACOLOR :: 0x0080;
+LR_LOADMAP3DCOLORS :: 0x1000;
+LR_CREATEDIBSECTION :: 0x2000;
+LR_COPYFROMRESOURCE :: 0x4000;
+LR_SHARED :: 0x8000;
 
 KBDLLHOOKSTRUCT :: struct {
 	vkCode: DWORD;
@@ -76,6 +96,10 @@ IsWindowVisible :: (hwnd: HWND) -> BOOL #foreign user32;
 GetClassNameW :: (hWnd: HWND, lpClassName: *u16, nMaxCount: s32) -> s32 #foreign user32;
 SetForegroundWindow :: (hWnd: HWND) -> BOOL #foreign user32;
 BringWindowToTop :: (hWnd: HWND) -> BOOL #foreign user32;
+MoveWindow :: (hwnd: HWND, x: s32, y: s32, width: s32, height: s32, repaint: BOOL) -> BOOL #foreign user32;
+
+CS_DROPSHADOW :: 0x00020000;
+CS_NOCLOSE :: 0x0200;
 
 SetWindowsHookExW :: (idHook: s32, lpfn: HOOKPROC, hmod: HINSTANCE, dwThreadId: DWORD) -> HHOOK #foreign user32;
 UnhookWindowsHookEx :: (hhk: HHOOK) -> BOOL #foreign user32;
@@ -170,7 +194,7 @@ NIM_SETVERSION :: 0x00000004;
 NIN_SELECT :: 0x0400;
 
 Shell_NotifyIconW :: (dwMessage: DWORD, lpData: *NOTIFYICONDATAW) -> BOOL #foreign shell32;
-
+ShellExecuteW :: (hwnd: HWND, lpOperation: *u16, lpFile: *u16, lpParameters: *u16, lpDirectory: *u16, nShowCmd: s32) -> HINSTANCE #foreign shell32;
 
 
 DWMWINDOWATTRIBUTE :: enum u32 {
@@ -215,6 +239,35 @@ DwmExtendFrameIntoClientArea :: (hWnd: HWND, pMarInset: *MARGINS) -> HRESULT #fo
 DwmSetWindowAttribute :: (hWnd: HWND, dwAttribute: DWMWINDOWATTRIBUTE, pvAttribute: *void, cbAttribute: DWORD) -> HRESULT #foreign dwmapi;
 
 
+GetScaleFactorForMonitor :: (hmonitor: HMONITOR, scale_factor: *DEVICE_SCALE_FACTOR) #foreign shcore;
+
+Device_Scale_Factor :: enum {
+  DEVICE_SCALE_FACTOR_INVALID :: 0;
+  SCALE_100_PERCENT :: 100;
+  SCALE_120_PERCENT :: 120;
+  SCALE_125_PERCENT :: 125;
+  SCALE_140_PERCENT :: 140;
+  SCALE_150_PERCENT :: 150;
+  SCALE_160_PERCENT :: 160;
+  SCALE_175_PERCENT :: 175;
+  SCALE_180_PERCENT :: 180;
+  SCALE_200_PERCENT :: 200;
+  SCALE_225_PERCENT :: 225;
+  SCALE_250_PERCENT :: 250;
+  SCALE_300_PERCENT :: 300;
+  SCALE_350_PERCENT :: 350;
+  SCALE_400_PERCENT :: 400;
+  SCALE_450_PERCENT :: 450;
+  SCALE_500_PERCENT :: 500;
+}
+DEVICE_SCALE_FACTOR :: Device_Scale_Factor;
+
+
+
+RegDeleteValueA :: (hkey: HKEY, lpValueName: *u8) -> LSTATUS #foreign kernel32;
+RegSetValueExA :: (hkey: HKEY, lpValueName: *u8, Reserved: DWORD, dwType: DWORD, lpData: *u8, cbData: DWORD) -> LSTATUS #foreign kernel32;
+
+
 
 #scope_file
 
@@ -222,3 +275,4 @@ kernel32 :: #system_library "kernel32";
 user32   :: #system_library "user32";
 shell32  :: #system_library "Shell32";
 dwmapi   :: #system_library "Dwmapi";
+shcore   :: #system_library "Shcore";
