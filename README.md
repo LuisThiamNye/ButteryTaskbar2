@@ -1,10 +1,18 @@
 # Buttery Taskbar 2
 
+<p align="center">
+<img width="540" src="https://github.com/LuisThiamNye/miscellaneous-media/blob/8714fceb0cc01309fd2402f4887c2ee7e106656c/buttery-taskbar-feature-image.png">
+</p>
+
 Save space on your screen by hiding the taskbar when it's not needed. This goes beyond the built-in auto-hide feature; it prevents the taskbar being shown by the mouse cursor. To reveal the taskbar, press the Windows key to open the Start menu.
 
 **New:** Don't want to use the keyboard? Now you can scroll with the mouse at the bottom of the screen to show the Start menu as well!
 
 This is the successor to the original [Buttery Taskbar](https://github.com/CrypticButter/ButteryTaskbar) where you will find further rationale for this program. Version 2 has lower CPU and memory usage, and should work more reliably overall.
+
+<img width="260"
+     align="right"
+     src="https://github.com/LuisThiamNye/miscellaneous-media/blob/8714fceb0cc01309fd2402f4887c2ee7e106656c/buttery-taskbar-screenshot-2.2.0.png">
 
 ## Features and behaviour
 
