@@ -3,7 +3,7 @@
 #load "windows-extra.jai";
 #load "winhttp.jai";
 
-Basic :: #import "Basic"()(MEMORY_DEBUGGER = !RELEASE_MODE, ENABLE_ASSERT=!RELEASE_MODE);
+Basic :: #import "Basic"()(MEMORY_DEBUGGER = !RELEASE_MODE, ENABLE_ASSERT=!RELEASE_MODE, TEMP_ALLOCATOR_POISON_FREED_MEMORY=!RELEASE_MODE);
 #if RELEASE_MODE { // :nullify_print_and_log_statements
 	using,except(log, log_error, print) Basic;
 	log :: (_: ..Any, flags: Log_Flags = 0) #expand {}
@@ -31,6 +31,7 @@ core_windows: [..]HWND;
 should_show_taskbar_due_to_focus:= true;
 should_stay_visible_before: s64; // measured in milliseconds
 is_win_key_down: bool;
+win_key_press_requested:= false;
 taskbar_thread: Thread;
 taskbar_thread_sema: Semaphore;
 stop_polling: bool;
@@ -68,6 +69,7 @@ main :: () {
 
 	// Could instead use Raw Input, maybe. Docs advise that Raw Input is generally better, with a difference being that it does not receive synthetic keystrokes.
 	// Also seems like Raw Input requires continuous polling, while presumably with the hooks the threads can sleep while there is no input.
+	// -- UPDATE: I think this is false. Use WM_INPUT and there's a flag to receive system-wide events even when the window is not focused.
 	//
 	// For global shortcuts, could use RegisterHotKey which I think would mean the unprivileged program can still get the event when a privileged app is activated.
 	//
@@ -177,123 +179,124 @@ setup_hidden_window :: () -> bool {
 
 notify_icon_data: NOTIFYICONDATAW;
 
+handle_window_message_context: Context;
 handle_window_message :: (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT #c_call {
-	new_context: Context;
-	push_context new_context {
-		icon_callback_msg: u32 : WM_APP + 1;
+	handle_window_message_context.stack_trace = null;
+	push_context,defer_pop handle_window_message_context;
 
-		if msg == {
-			case WM_CREATE;
-				handle_wm_create :: (hwnd: HWND) {
-					notify_icon_data.cbSize = size_of(NOTIFYICONDATAW);
-					notify_icon_data.hWnd = hwnd;
-					notify_icon_data.uID = 1;
-					notify_icon_data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
-					notify_icon_data.uCallbackMessage = icon_callback_msg;
-					#if USE_DEFAULT_ICON {
-						notify_icon_data.hIcon = LoadImageW(null, IDI_APPLICATION, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
-					} else {
-						notify_icon_data.hIcon = LoadImageW(GetModuleHandleW(null), xx ICON_RESOURCE_ID, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
-					}
-					memcpy(*notify_icon_data.szTip, utf8_to_wide(app_name), app_name.count*2);
-					NOTIFYICON_VERSION_4: u32 : 4;
-					notify_icon_data.uVersion = NOTIFYICON_VERSION_4;
+	icon_callback_msg: u32 : WM_APP + 1;
 
-					Shell_NotifyIconW(NIM_ADD, *notify_icon_data);
-					Shell_NotifyIconW(NIM_SETVERSION, *notify_icon_data);
+	if msg == {
+		case WM_CREATE;
+			handle_wm_create :: (hwnd: HWND) {
+				notify_icon_data.cbSize = size_of(NOTIFYICONDATAW);
+				notify_icon_data.hWnd = hwnd;
+				notify_icon_data.uID = 1;
+				notify_icon_data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
+				notify_icon_data.uCallbackMessage = icon_callback_msg;
+				#if USE_DEFAULT_ICON {
+					notify_icon_data.hIcon = LoadImageW(null, IDI_APPLICATION, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
+				} else {
+					notify_icon_data.hIcon = LoadImageW(GetModuleHandleW(null), xx ICON_RESOURCE_ID, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
 				}
-				no_inline handle_wm_create(hwnd);
+				memcpy(*notify_icon_data.szTip, utf8_to_wide(app_name), app_name.count*2);
+				NOTIFYICON_VERSION_4: u32 : 4;
+				notify_icon_data.uVersion = NOTIFYICON_VERSION_4;
 
-			case icon_callback_msg;
-				// NIN_POPUPOPEN: u32 : WM_USER + 6;
-				// NIN_POPUPCLOSE: u32 : WM_USER + 7;
-				NINF_KEY: u32 : 1;
-				NIN_KEYSELECT: u32 : NIN_SELECT | NINF_KEY;
-				if lparam & 0xffff == {
-					case NIN_SELECT; #through; // primary action
-					case NIN_KEYSELECT; #through; // primary action
-					case WM_CONTEXTMENU; // right click
-						x_anchor:= cast(s32) wparam & 0xffff;
-						y_anchor:= cast(s32) (wparam >> 16);
-						open_menu_window(x_anchor, y_anchor);
+				Shell_NotifyIconW(NIM_ADD, *notify_icon_data);
+				Shell_NotifyIconW(NIM_SETVERSION, *notify_icon_data);
+			}
+			no_inline handle_wm_create(hwnd);
+
+		case icon_callback_msg;
+			// NIN_POPUPOPEN: u32 : WM_USER + 6;
+			// NIN_POPUPCLOSE: u32 : WM_USER + 7;
+			NINF_KEY: u32 : 1;
+			NIN_KEYSELECT: u32 : NIN_SELECT | NINF_KEY;
+			if lparam & 0xffff == {
+				case NIN_SELECT; #through; // primary action
+				case NIN_KEYSELECT; #through; // primary action
+				case WM_CONTEXTMENU; // right click
+					x_anchor:= cast(s32) wparam & 0xffff;
+					y_anchor:= cast(s32) (wparam >> 16);
+					open_menu_window(x_anchor, y_anchor);
+			}
+
+		case WM_DESTROY;
+			log("WM_DESTROY");
+			Shell_NotifyIconW(NIM_DELETE, *notify_icon_data);
+			terminate_program();
+			return 0;
+
+		case;
+			// We listen for window activation for two purposes:
+			// 1. Set the taskbar state.
+			// 2. Hide the menu popup.
+			if msg == WM_SHELLHOOKMESSAGE {
+
+				get_window_class_name :: (hwnd: HWND, allocator:= temp) -> string {
+					class_name:= NewArray(48, u16).data;
+					GetClassNameW(hwnd, class_name, 47);
+					return wide_to_utf8(class_name, -1, allocator);
 				}
 
-			case WM_DESTROY;
-				log("WM_DESTROY");
-				Shell_NotifyIconW(NIM_DELETE, *notify_icon_data);
-				terminate_program();
-				return 0;
+				if wparam == {
+					// case HSHELL_FLASH; // The orange taskbar icon flash
+					// I have not checked whether the flash causes the taskbar to become visible again.
+					// Maybe it is better to let the taskbar show (notifying the user of the alert), assuming it is easier enough to hide it again by window activation?
 
-			case;
-				// We listen for window activation for two purposes:
-				// 1. Set the taskbar state.
-				// 2. Hide the menu popup.
-				if msg == WM_SHELLHOOKMESSAGE {
+					case HSHELL_WINDOWACTIVATED;
+						log("HSHELL_WINDOWACTIVATED");
+						if is_menu_active close_menu();
+						if config__enabled {
+							refresh_taskbar_state();
+							set_taskbar_visibility();
+						}
 
-					get_window_class_name :: (hwnd: HWND, allocator:= temp) -> string {
-						class_name:= NewArray(48, u16).data;
-						GetClassNameW(hwnd, class_name, 47);
-						return wide_to_utf8(class_name, -1, allocator);
-					}
+					case HSHELL_RUDEAPPACTIVATED;
+						if config__enabled | is_menu_active {
+							if !is_menu_active reset_temporary_storage(); // temporary storage gets reset in the UI loop.
 
-					if wparam == {
-						// case HSHELL_FLASH; // The orange taskbar icon flash
-						// I have not checked whether the flash causes the taskbar to become visible again.
-						// Maybe it is better to let the taskbar show (notifying the user of the alert), assuming it is easier enough to hide it again by window activation?
+							// Note: we are not able to detect alt-tab by this method of activation detection
 
-						case HSHELL_WINDOWACTIVATED;
-							log("HSHELL_WINDOWACTIVATED");
-							if is_menu_active close_menu();
-							if config__enabled {
-								refresh_taskbar_state();
-								set_taskbar_visibility();
-							}
-
-						case HSHELL_RUDEAPPACTIVATED;
-							if config__enabled | is_menu_active {
-								if !is_menu_active reset_temporary_storage(); // temporary storage gets reset in the UI loop.
-
-								// Note: we are not able to detect alt-tab by this method of activation detection
-
-								activated_window:= cast(HWND) lparam;
-								if activated_window == null {
-									if config__enabled {
-										activated_window = GetForegroundWindow();
-										// class TopLevelWindowForOverflowXamlIsland is used for the tray overflow menu
-										// class XamlExplorerHostIslandWindow is used for task view
-										class_name_str:= get_window_class_name(activated_window);
-										log("Activated (null): %", class_name_str);
-										if class_name_str == "Shell_TrayWnd"
-										|| class_name_str == "TopLevelWindowForOverflowXamlIsland"
-										|| class_name_str == "XamlExplorerHostIslandWindow"
-										|| class_name_str == "Shell_SecondaryTrayWnd" {
-											should_show_taskbar_due_to_focus = true;
-										} else {
-											should_show_taskbar_due_to_focus = false;
-										}
-									}
-								} else {
-									// start menu corresponds to window class of Windows.UI.Core.CoreWindow, but is also used for things like notification and action centre
-									// Could be more reliably identified as the exe is SearchHost.exe
+							activated_window:= cast(HWND) lparam;
+							if activated_window == null {
+								if config__enabled {
+									activated_window = GetForegroundWindow();
+									// class TopLevelWindowForOverflowXamlIsland is used for the tray overflow menu
+									// class XamlExplorerHostIslandWindow is used for task view
 									class_name_str:= get_window_class_name(activated_window);
-									log("Activated: %", class_name_str);
-									if is_menu_active && class_name_str != menu_class_name  close_menu();
-									if config__enabled {
-										if class_name_str == "Windows.UI.Core.CoreWindow" {
-											found:= array_find(core_windows, activated_window);
-											if !found array_add(*core_windows, activated_window);
-										}
-										refresh_taskbar_state();
+									log("Activated (null): %", class_name_str);
+									if class_name_str == "Shell_TrayWnd"
+									|| class_name_str == "TopLevelWindowForOverflowXamlIsland"
+									|| class_name_str == "XamlExplorerHostIslandWindow"
+									|| class_name_str == "Shell_SecondaryTrayWnd" {
+										should_show_taskbar_due_to_focus = true;
+									} else {
+										should_show_taskbar_due_to_focus = false;
 									}
 								}
-								if config__enabled set_taskbar_visibility();
+							} else {
+								// start menu corresponds to window class of Windows.UI.Core.CoreWindow, but is also used for things like notification and action centre
+								// Could be more reliably identified as the exe is SearchHost.exe
+								class_name_str:= get_window_class_name(activated_window);
+								log("Activated: %", class_name_str);
+								if is_menu_active && class_name_str != menu_class_name  close_menu();
+								if config__enabled {
+									if class_name_str == "Windows.UI.Core.CoreWindow" {
+										found:= array_find(core_windows, activated_window);
+										if !found array_add(*core_windows, activated_window);
+									}
+									refresh_taskbar_state();
+								}
 							}
-					}
+							if config__enabled set_taskbar_visibility();
+						}
 				}
-		}
-
-		return DefWindowProcW(hwnd, msg, wparam, lparam);
+			}
 	}
+
+	return DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
 
@@ -311,7 +314,7 @@ refresh_taskbars :: () {
 	}
 }
 
-set_taskbar_visibility :: () {
+set_taskbar_visibility :: inline () {
 	atomic_write(*stop_polling, true);
 	signal(*taskbar_thread_sema);
 }
@@ -325,6 +328,17 @@ taskbar_thread_proc :: (thread: *Thread) -> s64 {
 
 		refresh_taskbars();
 		refresh_monitor_rect();
+
+		if win_key_press_requested {
+			ip: INPUT;
+			ip.type = .KEYBOARD;
+			ip.ki.wVk = VK_LWIN;
+			SendInput(1, *ip, size_of(INPUT));
+			ip.ki.dwFlags = KEYEVENTF_KEYUP;
+			SendInput(1, *ip, size_of(INPUT));
+
+			win_key_press_requested = false;
+		}
 
 		atomic_write(*stop_polling, false);
 		n_attempts:= 0;
@@ -410,31 +424,32 @@ set_windows_hooks_appropriately :: () {
 // Key listener
 //
 
+keyboard_hook_proc_context: Context;
 keyboard_hook_proc :: (ncode: s32, wparam: WPARAM, lparam: LPARAM) -> LRESULT #c_call {
-	new_context: Context;
-	push_context new_context {
-		info:= cast(*KBDLLHOOKSTRUCT) lparam;
+	keyboard_hook_proc_context.stack_trace = null;
+	push_context,defer_pop keyboard_hook_proc_context;
 
-		if ncode == 0 {
-			vk:= info.vkCode;
-			// We organise this to minimise the computation per message. Only when we find the rarer trigger
-			// keys do we go out to collect further information like modifiers.
-			if wparam == {
-				case WM_KEYDOWN;
-					if inline handle_key_down(vk) return 1;
-				case WM_KEYUP;
-					if (vk == VK_LWIN || vk == VK_RWIN) && config__enabled {
-						// GetKeyState may report that the current vkey is still down, so only check the other key.
-						is_win_key_down = GetKeyState(cast(s32) ifx vk==VK_LWIN VK_RWIN else VK_LWIN) & 0xf0 > 0;
-						// We want the taskbar to stay visible for a short while after the windows key is lifted,
-						// as start menu activation might come next and we do not want to hide the taskbar before then.
-						should_stay_visible_before = current_millis() + 400;
-						set_taskbar_visibility();
-					}
-			}
+	info:= cast(*KBDLLHOOKSTRUCT) lparam;
+
+	if ncode == 0 {
+		vk:= info.vkCode;
+		// We organise this to minimise the computation per message. Only when we find the rarer trigger
+		// keys do we go out to collect further information like modifiers.
+		if wparam == {
+			case WM_KEYDOWN;
+				if inline handle_key_down(vk) return 1;
+			case WM_KEYUP;
+				if (vk == VK_LWIN || vk == VK_RWIN) && config__enabled {
+					// GetKeyState may report that the current vkey is still down, so only check the other key.
+					is_win_key_down = GetKeyState(cast(s32) ifx vk==VK_LWIN VK_RWIN else VK_LWIN) & 0xf0 > 0;
+					// We want the taskbar to stay visible for a short while after the windows key is lifted,
+					// as start menu activation might come next and we do not want to hide the taskbar before then.
+					should_stay_visible_before = current_millis() + 400;
+					set_taskbar_visibility();
+				}
 		}
-		return CallNextHookEx(keyboard_hook, ncode, wparam, lparam);
 	}
+	return CallNextHookEx(keyboard_hook, ncode, wparam, lparam);
 }
 
 handle_key_down :: (vk: u32) -> handled:= false {
@@ -483,39 +498,44 @@ handle_key_down :: (vk: u32) -> handled:= false {
 // Mouse scroll listener
 // The hook for this should only be active when config__scroll_activation_enabled
 
+mouse_hook_proc_context: Context;
 mouse_hook_proc :: (ncode: s32, wparam: WPARAM, lparam: LPARAM) -> LRESULT #c_call {
-	new_context: Context;
-	push_context new_context {
-		if ncode == 0 && wparam == WM_MOUSEWHEEL {
-			info:= cast(*MSLLHOOKSTRUCT) lparam;
-			delta:= info.mouseData >> 16;
-			if delta != 0 {
-				if inline handle_mouse_scroll(delta, info.pt.x, info.pt.y) return 1;
-			}
+	mouse_hook_proc_context.stack_trace = null;
+	push_context,defer_pop mouse_hook_proc_context;
+
+	if ncode == 0 && wparam == WM_MOUSEWHEEL {
+		info:= cast(*MSLLHOOKSTRUCT) lparam;
+		delta:= info.mouseData >> 16;
+		if delta != 0 {
+			if inline handle_mouse_scroll(delta, info.pt.x, info.pt.y) return 1;
 		}
-		return CallNextHookEx(keyboard_hook, ncode, wparam, lparam);
 	}
+	return CallNextHookEx(keyboard_hook, ncode, wparam, lparam);
 }
+
+is_showing_window_due_to_scroll_action:= false;
 
 handle_mouse_scroll :: (delta: int, mouse_x: int, mouse_y: int) -> handled:= false {
 	// When the cursor is at the bottom edge of the primary monitor
 	if mouse_y == primary_monitor_rect.bottom-1
-	&& primary_monitor_rect.left <= mouse_x && mouse_x < primary_monitor_rect.right {
-		log("Focusing taskbar due to scroll action");
-		ShowWindow(taskbar_hwnds[0], SW_RESTORE);
-		SetForegroundWindow(taskbar_hwnds[0]); // Note: conditions may not be satisfied to this to actually be effective; see docs.
+	&& primary_monitor_rect.left <= mouse_x && mouse_x < primary_monitor_rect.right
+	&& !should_show_taskbar_due_to_focus {
 
-		// Open Start Menu to workaround sublime's broken maximised/fullscreen state.
-		// We do not send events if the Start menu is already open.
-		if !should_show_taskbar_due_to_focus {
-			should_show_taskbar_due_to_focus = true;
-			ip: INPUT;
-			ip.type = .KEYBOARD;
-			ip.ki.wVk = VK_LWIN;
-			SendInput(1, *ip, size_of(INPUT));
-			ip.ki.dwFlags = KEYEVENTF_KEYUP;
-			SendInput(1, *ip, size_of(INPUT));
-		}
+		// It has been found that with a very high scroll rate (rapid fire of these scroll events)
+		// that Windows starts beeping and input becomes less responsive.
+		// This seems to happen because we get a scroll event happening whilst the hook is still
+		// waiting on its stuff to complete.
+		// It does not help to immediately unhook the mouse hook proc, so the proc must complete fast.
+		// This minimal implementation is better than it was before, but with an absurd scroll rate
+		// (e.g. with Logitech hyper scroll thing) you will still get beeping. In fact, I have observed
+		// beeping this way just by scrolling very quickly over the sidebar in Sublime Text, not
+		// at the bottom of the screen.
+
+		log("Focusing taskbar due to scroll action");
+
+		should_show_taskbar_due_to_focus = true;
+		win_key_press_requested = true; // Open Start Menu to workaround sublime's broken maximised/fullscreen state.
+		set_taskbar_visibility();
 
 		return true;
 	}
