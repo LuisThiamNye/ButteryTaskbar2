@@ -132,9 +132,11 @@ refresh_monitor_rect :: () {
 }
 
 WM_SHELLHOOKMESSAGE: u32;
+taskbar_restart_window_message: u32;
 
 setup_hidden_window :: () -> bool {
 	WM_SHELLHOOKMESSAGE = RegisterWindowMessageW(utf8_to_wide("SHELLHOOK"));
+	taskbar_restart_window_message = RegisterWindowMessageW(utf8_to_wide("TaskbarCreated"));
 
 	wc: WNDCLASSEXW;
 	wc.cbSize = size_of(WNDCLASSEXW);
@@ -186,27 +188,28 @@ handle_window_message :: (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) 
 
 	icon_callback_msg: u32 : WM_APP + 1;
 
+	add_notification_icon :: no_inline (hwnd: HWND) {
+		notify_icon_data.cbSize = size_of(NOTIFYICONDATAW);
+		notify_icon_data.hWnd = hwnd;
+		notify_icon_data.uID = 1;
+		notify_icon_data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
+		notify_icon_data.uCallbackMessage = icon_callback_msg;
+		#if USE_DEFAULT_ICON {
+			notify_icon_data.hIcon = LoadImageW(null, IDI_APPLICATION, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
+		} else {
+			notify_icon_data.hIcon = LoadImageW(GetModuleHandleW(null), xx ICON_RESOURCE_ID, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
+		}
+		memcpy(*notify_icon_data.szTip, utf8_to_wide(app_name), app_name.count*2);
+		NOTIFYICON_VERSION_4: u32 : 4;
+		notify_icon_data.uVersion = NOTIFYICON_VERSION_4;
+
+		Shell_NotifyIconW(NIM_ADD, *notify_icon_data);
+		Shell_NotifyIconW(NIM_SETVERSION, *notify_icon_data);
+	}
+
 	if msg == {
 		case WM_CREATE;
-			handle_wm_create :: (hwnd: HWND) {
-				notify_icon_data.cbSize = size_of(NOTIFYICONDATAW);
-				notify_icon_data.hWnd = hwnd;
-				notify_icon_data.uID = 1;
-				notify_icon_data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
-				notify_icon_data.uCallbackMessage = icon_callback_msg;
-				#if USE_DEFAULT_ICON {
-					notify_icon_data.hIcon = LoadImageW(null, IDI_APPLICATION, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
-				} else {
-					notify_icon_data.hIcon = LoadImageW(GetModuleHandleW(null), xx ICON_RESOURCE_ID, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
-				}
-				memcpy(*notify_icon_data.szTip, utf8_to_wide(app_name), app_name.count*2);
-				NOTIFYICON_VERSION_4: u32 : 4;
-				notify_icon_data.uVersion = NOTIFYICON_VERSION_4;
-
-				Shell_NotifyIconW(NIM_ADD, *notify_icon_data);
-				Shell_NotifyIconW(NIM_SETVERSION, *notify_icon_data);
-			}
-			no_inline handle_wm_create(hwnd);
+			add_notification_icon(hwnd);
 
 		case icon_callback_msg;
 			// NIN_POPUPOPEN: u32 : WM_USER + 6;
@@ -233,7 +236,6 @@ handle_window_message :: (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) 
 			// 1. Set the taskbar state.
 			// 2. Hide the menu popup.
 			if msg == WM_SHELLHOOKMESSAGE {
-
 				get_window_class_name :: (hwnd: HWND, allocator:= temp) -> string {
 					class_name:= NewArray(48, u16).data;
 					GetClassNameW(hwnd, class_name, 47);
@@ -245,15 +247,15 @@ handle_window_message :: (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) 
 					// I have not checked whether the flash causes the taskbar to become visible again.
 					// Maybe it is better to let the taskbar show (notifying the user of the alert), assuming it is easier enough to hide it again by window activation?
 
-					case HSHELL_WINDOWACTIVATED;
+					case HSHELL_WINDOWACTIVATED; {
 						log("HSHELL_WINDOWACTIVATED");
 						if is_menu_active close_menu();
 						if config__enabled {
 							refresh_taskbar_state();
 							set_taskbar_visibility();
 						}
-
-					case HSHELL_RUDEAPPACTIVATED;
+					}
+					case HSHELL_RUDEAPPACTIVATED; {
 						if config__enabled | is_menu_active {
 							if !is_menu_active reset_temporary_storage(); // temporary storage gets reset in the UI loop.
 
@@ -292,7 +294,10 @@ handle_window_message :: (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) 
 							}
 							if config__enabled set_taskbar_visibility();
 						}
+					}
 				}
+			} else if msg == taskbar_restart_window_message {
+				add_notification_icon(hwnd);
 			}
 	}
 
