@@ -51,7 +51,7 @@ newer_version: string;
 
 
 main :: () {
-	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2); // TODO Use manifest instead.
 
 	log("Initialising %", app_name);
 	exe_path = get_path_of_running_executable();
@@ -339,6 +339,14 @@ taskbar_thread_proc :: (thread: *Thread) -> s64 {
 
 			win_key_press_requested = false;
 		}
+			
+		if taskbar_hwnds {
+			abd: APPBARDATA;
+			abd.cbSize = size_of(APPBARDATA);
+			abd.hWnd = taskbar_hwnds[0];
+			abd.lParam = ifx (config__enabled && !is_finalising) || config__autohide_when_disabled ABS_AUTOHIDE else 0;
+			SHAppBarMessage(ABM_SETSTATE, *abd);
+		}
 
 		atomic_write(*stop_polling, false);
 		n_attempts:= 0;
@@ -346,13 +354,14 @@ taskbar_thread_proc :: (thread: *Thread) -> s64 {
 			defer n_attempts += 1;
 			failed:= false;
 			should_show_taskbar:= should_show_taskbar_due_to_focus || is_win_key_down || current_millis() < should_stay_visible_before;
-			for hwnd, i: taskbar_hwnds {
+			for hwnd, hwnd_index: taskbar_hwnds {
 				previously_shown:= cast(bool) ShowWindow(hwnd, cast(s32) ifx should_show_taskbar SW_SHOWNOACTIVATE else SW_HIDE);
 				actually_shown:= cast(bool) IsWindowVisible(hwnd);
-				if previously_shown != should_show_taskbar
+				if previously_shown != should_show_taskbar {
 					log("Set taskbar % visibility: % -> % (actual: %; win: %; state: %; n: %)",
-						i, previously_shown, should_show_taskbar,
+						hwnd_index, previously_shown, should_show_taskbar,
 						actually_shown, is_win_key_down, should_show_taskbar_due_to_focus, n_attempts);
+				}
 				failed = should_show_taskbar != actually_shown;
 			}
 			if current_millis() < should_stay_visible_before {

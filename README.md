@@ -12,7 +12,7 @@ This is the successor to the original [Buttery Taskbar](https://github.com/Crypt
 
 <img width="260"
      align="right"
-     src="https://github.com/LuisThiamNye/miscellaneous-media/blob/8714fceb0cc01309fd2402f4887c2ee7e106656c/buttery-taskbar-screenshot-2.2.0.png">
+     src="https://github.com/LuisThiamNye/miscellaneous-media/blob/f1283d276b8d6d0a9899d2a7c9c3baca74ca3c8b/buttery-taskbar-screenshot-2.3.0.png">
 
 ## Features and behaviour
 
@@ -22,12 +22,11 @@ This is the successor to the original [Buttery Taskbar](https://github.com/Crypt
 - Scroll at the bottom edge of the primary monitor to open the Start menu (optional).
 - Tray icon for accessing the settings menu, which also shows available software updates.
 - Enable or disable functionality with the shortcut: `Ctrl` + `Win` + `F11` (optional, disabled by default).
+- Option to automatically enable/disable Windows taskbar auto-hide when disabling Buttery Taskbar.
 
 ## Installation
 
 The program is provided as a single executable and no installer. [Download it here](https://github.com/LuisThiamNye/ButteryTaskbar2/releases/) and just run the program.
-
-**Make sure to set the taskbar to auto-hide in Windows Settings** (otherwise you'll end up with a large unusable gap).
 
 If you want it to run at log-in, I recommend creating an entry in Task Scheduler. There are plenty of instructions online for how to make a program run at log-in with Task Scheduler.
 

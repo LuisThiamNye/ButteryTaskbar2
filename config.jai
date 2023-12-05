@@ -3,6 +3,7 @@ config__enabled:= true;
 config__scroll_activation_enabled:= true;
 config__toggle_shortcut_enabled:= false;
 config__auto_launch_enabled:= false;
+config__autohide_when_disabled:= true;
 
 set_config__enabled :: (v: bool) {
 	config__enabled = v;
@@ -184,7 +185,7 @@ prepare_window_pos :: (x_anchor: s32, y_anchor: s32) -> s32, s32 {
 	refresh_monitor_rect();
 	ui_scale:= scale_factor_from_monitor(primary_monitor);
 	window_width  = xx (240*ui_scale);
-	window_height = xx (265*ui_scale);
+	window_height = xx (290*ui_scale);
 	x, y: s32;
 	x = x_anchor - window_width/2;
 	y = y_anchor - window_height + xx (20*ui_scale);
@@ -328,6 +329,14 @@ draw_menu_frame :: (hwnd: HWND) {
 	}
 
 	r.y -= height;
+	toggled = base_checkbox(r, "Auto-hide when disabled", config__autohide_when_disabled, *my_theme.checkbox_theme, 3);
+	if toggled {
+		config__autohide_when_disabled = !config__autohide_when_disabled;
+		set_taskbar_visibility();
+		config_changed = true;
+	}
+
+	r.y -= height;
 	toggled = base_checkbox(r, "Start at log-in (non-admin)", config__auto_launch_enabled, *my_theme.checkbox_theme, 3);
 	if toggled {
 		set_config__auto_launch_enabled(!config__auto_launch_enabled);
@@ -365,13 +374,21 @@ draw_menu_frame :: (hwnd: HWND) {
 	Simp.swap_buffers(hwnd);
 }
 
-Cold_Config :: struct {
-	VERSION :: 1;
-	version:= VERSION;
-	enabled: bool;
-	toggle_shortcut_enabled: bool;
-	scroll_activation_enabled: bool;
-	auto_launch_enabled: bool;
+#assert size_of(Cold_Config) == 512;
+Cold_Config :: union {
+	_: [512]u8;
+	struct {
+		VERSION :: 2;
+		version: s64;
+		using v1: V1;
+		V1 :: struct {
+			enabled: bool;
+			toggle_shortcut_enabled: bool;
+			scroll_activation_enabled: bool;
+			auto_launch_enabled: bool;
+		}
+		autohide_when_disabled: bool;
+	}
 }
 
 config_file_name :: "config";
@@ -385,19 +402,27 @@ save_config :: () {
 	}
 	config_path:= join(data_dir, "\\", config_file_name, allocator=temp);
 	config:= Cold_Config.{
-											enabled = config__enabled,
-			toggle_shortcut_enabled = config__toggle_shortcut_enabled,
+		version = Cold_Config.VERSION,
+		enabled = config__enabled,
+		toggle_shortcut_enabled = config__toggle_shortcut_enabled,
 		scroll_activation_enabled = config__scroll_activation_enabled,
-					auto_launch_enabled = config__auto_launch_enabled,
+		auto_launch_enabled = config__auto_launch_enabled,
+		autohide_when_disabled = config__autohide_when_disabled,
 	};
 	if !write_entire_file(config_path, *config, size_of(Cold_Config)) {
 		log_error("Failed to write config file");
 		return;
 	}
-	log("Saved config to %", config_path);
+	log("Saved config version % to %", config.version, config_path);
 }
 
 load_config :: () {
+	// Set defaults first.
+	abd: APPBARDATA;
+	abd.cbSize = size_of(APPBARDATA);
+	res:= SHAppBarMessage(ABM_GETSTATE, *abd);
+	config__autohide_when_disabled = (res & ABS_AUTOHIDE) != 0;
+
 	programs_dir:= get_path_os_program_data();
 	data_dir:= join(programs_dir, "\\", app_name, allocator=temp);
 	config_path:= join(data_dir, "\\", config_file_name, allocator=temp);
@@ -406,21 +431,31 @@ load_config :: () {
 		log("Failed to read config file %", config_path, flags=.WARNING);
 		return;
 	}
-	if data.count != size_of(Cold_Config) {
-		log("Config file contains an invalid number of bytes. Got %, wanted %.", data.count, size_of(Cold_Config), flags=.WARNING);
+	if data.count < 8 {
+		log("Config file is too small in size to be valid (% bytes).", data.count, flags=.WARNING);
 		return;
 	}
 	config:= cast(*Cold_Config) data.data;
-	if config.version != Cold_Config.VERSION {
-		log("Unsupported config file version. Got %, wanted %.", config.version, Cold_Config.VERSION, flags=.WARNING);
+	if !(1 <= config.version && config.version <= Cold_Config.VERSION) {
+		log("Unsupported config file version. Got %, wanted at most %.", config.version, Cold_Config.VERSION, flags=.WARNING);
 		return;
 	}
-	set_config__enabled(                config.enabled);
-	config__toggle_shortcut_enabled   = config.toggle_shortcut_enabled;
+	expected_size:= ifx config.version==1 16 else 512;
+	if data.count != expected_size {
+		log("Config file contains an invalid number of bytes. Got %, wanted %.", data.count, expected_size, flags=.WARNING);
+		return;
+	}
+	set_config__enabled(config.enabled);
+	config__toggle_shortcut_enabled = config.toggle_shortcut_enabled;
 	config__scroll_activation_enabled = config.scroll_activation_enabled;
-	set_config__auto_launch_enabled(    config.auto_launch_enabled);
+	set_config__auto_launch_enabled(config.auto_launch_enabled);
+
+	if config.version == 2 {
+		config__autohide_when_disabled = config.autohide_when_disabled;
+	}
+
 	set_windows_hooks_appropriately();
-	log("Loaded configuration successfully.");
+	log("Loaded configuration version % successfully.", config.version);
 }
 
 open_url_in_browser :: (url: string) {

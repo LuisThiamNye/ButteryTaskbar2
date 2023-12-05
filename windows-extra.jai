@@ -196,6 +196,22 @@ NIN_SELECT :: 0x0400;
 Shell_NotifyIconW :: (dwMessage: DWORD, lpData: *NOTIFYICONDATAW) -> BOOL #foreign shell32;
 ShellExecuteW :: (hwnd: HWND, lpOperation: *u16, lpFile: *u16, lpParameters: *u16, lpDirectory: *u16, nShowCmd: s32) -> HINSTANCE #foreign shell32;
 
+SHAppBarMessage :: (dwMessage: u32, pData: *APPBARDATA) -> u64 #foreign shell32;
+
+ABM_SETSTATE :: 0x0000000a;
+ABM_GETSTATE :: 0x00000004;
+ABS_AUTOHIDE :: 0x0000001;
+ABS_ALWAYSONTOP :: 0x0000002;
+
+APPBARDATA :: struct {
+	cbSize: u32;
+	hWnd: HWND;
+	uCallbackMessage: u32;
+	uEdge: u32;
+	rc: RECT;
+	lParam: LPARAM;
+}
+
 
 DWMWINDOWATTRIBUTE :: enum u32 {
 	DWMWA_NCRENDERING_ENABLED;
