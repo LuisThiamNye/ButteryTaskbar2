@@ -287,8 +287,8 @@ RegSetValueExA :: (hkey: HKEY, lpValueName: *u8, Reserved: DWORD, dwType: DWORD,
 
 #scope_file
 
-kernel32 :: #system_library "kernel32";
-user32   :: #system_library "user32";
-shell32  :: #system_library "Shell32";
-dwmapi   :: #system_library "Dwmapi";
-shcore   :: #system_library "Shcore";
+kernel32 :: #library,system "kernel32";
+user32   :: #library,system "user32";
+shell32  :: #library,system "Shell32";
+dwmapi   :: #library,system "Dwmapi";
+shcore   :: #library,system "Shcore";

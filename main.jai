@@ -6,9 +6,9 @@
 Basic :: #import "Basic"()(MEMORY_DEBUGGER = !RELEASE_MODE, ENABLE_ASSERT=!RELEASE_MODE, TEMP_ALLOCATOR_POISON_FREED_MEMORY=!RELEASE_MODE);
 #if RELEASE_MODE { // :nullify_print_and_log_statements
 	using,except(log, log_error, print) Basic;
-	log :: (_: ..Any, flags: Log_Flags = 0) #expand {}
-	log_error :: (_: ..Any) #expand {}
-	print :: (_: ..Any) #expand {}
+	log :: (#discard _: ..Any, #discard flags: Log_Flags = 0) #expand {}
+	log_error :: (#discard _: ..Any) #expand {}
+	print :: (#discard _: ..Any) #expand {}
 } else {
 	using Basic;
 }
@@ -131,12 +131,12 @@ refresh_monitor_rect :: () {
 	primary_monitor_rect = info.rcWork;
 }
 
-WM_SHELLHOOKMESSAGE: u32;
+wm_shellhookmessage: u32;
 taskbar_restart_window_message: u32;
 
 setup_hidden_window :: () -> bool {
-	WM_SHELLHOOKMESSAGE = RegisterWindowMessageW(utf8_to_wide("SHELLHOOK"));
-	taskbar_restart_window_message = RegisterWindowMessageW(utf8_to_wide("TaskbarCreated"));
+	wm_shellhookmessage = RegisterWindowMessageW(utf8_to_wide_new("SHELLHOOK",, temp));
+	taskbar_restart_window_message = RegisterWindowMessageW(utf8_to_wide_new("TaskbarCreated",, temp));
 
 	wc: WNDCLASSEXW;
 	wc.cbSize = size_of(WNDCLASSEXW);
@@ -144,7 +144,7 @@ setup_hidden_window :: () -> bool {
 	wc.lpfnWndProc = xx handle_window_message;
 	wc.hInstance = GetModuleHandleW(null);
 	wc.hCursor = LoadCursorW(null, IDC_ARROW);
-	class_name:= utf8_to_wide("BUTTERY_TASKBAR");
+	class_name:= utf8_to_wide_new("BUTTERY_TASKBAR",, temp);
 	wc.lpszClassName = class_name;
 
 	if 0 == RegisterClassExW(*wc) {
@@ -155,14 +155,14 @@ setup_hidden_window :: () -> bool {
 	main_hwnd = CreateWindowExW(
 		0,
 		class_name,
-		utf8_to_wide(app_name),
+		utf8_to_wide_new(app_name,, temp),
 		0,
 		0, 0, 0, 0,
 		null, null,
 		GetModuleHandleW(null),
 		null);
 
-	lib:= LoadLibraryW(utf8_to_wide("User32.dll"));
+	lib:= LoadLibraryW(utf8_to_wide_new("User32.dll",, temp));
 	if lib==null {
 		log_error("Failed to load User32.dll");
 		return false;
@@ -199,7 +199,7 @@ handle_window_message :: (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) 
 		} else {
 			notify_icon_data.hIcon = LoadImageW(GetModuleHandleW(null), xx ICON_RESOURCE_ID, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
 		}
-		memcpy(*notify_icon_data.szTip, utf8_to_wide(app_name), app_name.count*2);
+		memcpy(*notify_icon_data.szTip, utf8_to_wide_new(app_name,, temp), app_name.count*2);
 		NOTIFYICON_VERSION_4: u32 : 4;
 		notify_icon_data.uVersion = NOTIFYICON_VERSION_4;
 
@@ -235,11 +235,11 @@ handle_window_message :: (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) 
 			// We listen for window activation for two purposes:
 			// 1. Set the taskbar state.
 			// 2. Hide the menu popup.
-			if msg == WM_SHELLHOOKMESSAGE {
-				get_window_class_name :: (hwnd: HWND, allocator:= temp) -> string {
-					class_name:= NewArray(48, u16).data;
+			if msg == wm_shellhookmessage {
+				get_window_class_name :: (hwnd: HWND) -> string {
+					class_name:= NewArray(48, u16,, temp).data;
 					GetClassNameW(hwnd, class_name, 47);
-					return wide_to_utf8(class_name, -1, allocator);
+					return wide_to_utf8_new(class_name, -1);
 				}
 
 				if wparam == {
@@ -267,7 +267,7 @@ handle_window_message :: (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) 
 									activated_window = GetForegroundWindow();
 									// class TopLevelWindowForOverflowXamlIsland is used for the tray overflow menu
 									// class XamlExplorerHostIslandWindow is used for task view
-									class_name_str:= get_window_class_name(activated_window);
+									class_name_str:= get_window_class_name(activated_window,, temp);
 									log("Activated (null): %", class_name_str);
 									if class_name_str == "Shell_TrayWnd"
 									|| class_name_str == "TopLevelWindowForOverflowXamlIsland"
@@ -281,7 +281,7 @@ handle_window_message :: (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) 
 							} else {
 								// start menu corresponds to window class of Windows.UI.Core.CoreWindow, but is also used for things like notification and action centre
 								// Could be more reliably identified as the exe is SearchHost.exe
-								class_name_str:= get_window_class_name(activated_window);
+								class_name_str:= get_window_class_name(activated_window,, temp);
 								log("Activated: %", class_name_str);
 								if is_menu_active && class_name_str != menu_class_name  close_menu();
 								if config__enabled {
@@ -308,12 +308,12 @@ handle_window_message :: (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) 
 // Taskbar stuff
 
 refresh_taskbars :: () {
-	h_primary_taskbar:= FindWindowW(utf8_to_wide("Shell_TrayWnd"), null);
+	h_primary_taskbar:= FindWindowW(utf8_to_wide_new("Shell_TrayWnd",, temp), null);
 	array_reset(*taskbar_hwnds);
 	array_add(*taskbar_hwnds, h_primary_taskbar);
 	hwnd: HWND = null;
 	while 1 {
-		hwnd = FindWindowExW(null, hwnd, utf8_to_wide("Shell_SecondaryTrayWnd"), null);
+		hwnd = FindWindowExW(null, hwnd, utf8_to_wide_new("Shell_SecondaryTrayWnd",, temp), null);
 		if hwnd == null break;
 		array_add(*taskbar_hwnds, hwnd);
 	}
@@ -581,21 +581,21 @@ fetch_update_status :: () {
 	log("Checking version at: %0%", host_name, path);
 
 	user_agent:: #run join("Buttery Taskbar ", app_version);
-	session:= WinHttpOpen(utf8_to_wide(user_agent), WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, null, null, 0);
+	session:= WinHttpOpen(utf8_to_wide_new(user_agent,, temp), WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, null, null, 0);
 	if !session {
 		log_error("Failed to initialise WinHTTP.");
 		return;
 	}
 	defer WinHttpCloseHandle(session);
 
-	connection:= WinHttpConnect(session, utf8_to_wide(host_name), 443, 0);
+	connection:= WinHttpConnect(session, utf8_to_wide_new(host_name,, temp), 443, 0);
 	if !connection {
 		log_error("Failed to connect.");
 		return;
 	}
   defer WinHttpCloseHandle(connection);
 
-  request:= WinHttpOpenRequest(connection, utf8_to_wide("GET"), utf8_to_wide(path), null, null, null, WINHTTP_FLAG_SECURE);
+  request:= WinHttpOpenRequest(connection, utf8_to_wide_new("GET",, temp), utf8_to_wide_new(path,, temp), null, null, null, WINHTTP_FLAG_SECURE);
   if !request {
   	log_error("Failed to make request.");
   	return;
@@ -626,7 +626,7 @@ fetch_update_status :: () {
   	if n_bytes_read == 0 break;
   	buffer.count += n_bytes_read;
   }
-  response:= builder_to_string(*sb, allocator=temp);
+  response:= builder_to_string(*sb,, temp);
 
   found_tag:= false;
   while breakable:= 1 {

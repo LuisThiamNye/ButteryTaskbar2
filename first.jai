@@ -21,6 +21,8 @@ build :: () {
 			case "dev";
 				options.text_output_flags = 0;
 				should_execute = true;
+			case "norun";
+				should_execute = false;
 			case "release";
 				log("Building release-mode, version %", app_version);
 				set_optimization(*options, .VERY_OPTIMIZED);
@@ -158,7 +160,7 @@ build :: () {
 autorun_the_exe :: (w: Workspace, use_debugger: bool) {
 	using options := get_build_options(w);
 	if output_type == .EXECUTABLE {
-		run_string := ifx output_path then join(output_path, "/", output_executable_name, allocator=temp) else output_executable_name;
+		run_string := ifx output_path then join(output_path, "/", output_executable_name,, temp) else output_executable_name;
 		log("Running: %\n", run_string);
 		result := ifx use_debugger
 			then Process.run_command("remedybg.exe", "-g", "-q", "Buttery_Taskbar.rdbg")

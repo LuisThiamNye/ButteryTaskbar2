@@ -26,7 +26,7 @@ This is the successor to the original [Buttery Taskbar](https://github.com/Crypt
 
 ## Installation
 
-The program is provided as a single executable and no installer. [Download it here](https://github.com/LuisThiamNye/ButteryTaskbar2/releases/) and just run the program.
+The program is provided as a single executable and no installer. [Download it here](https://github.com/LuisThiamNye/ButteryTaskbar2/releases/) (or [via scoop](#installing-via-scoop)) and just run the program.
 
 If you want it to run at log-in, I recommend creating an entry in Task Scheduler. There are plenty of instructions online for how to make a program run at log-in with Task Scheduler.
 
@@ -36,6 +36,15 @@ Important: In the properties window of the Task Scheduler entry you create for B
 - In the "Settings" tab, **uncheck** "Stop the task if it runs longer than".
 
 You might notice that in Buttery Taskbar's tray menu, there is a "start at log-in" option. Keep this turned off if you followed the above steps. Unlike the Task Scheduler method, this option will not start Buttery Taskbar as administrator, and hence Buttery Taskbar will not work properly when the current focused window is running as administrator.
+
+## Installing via Scoop
+
+If you install the program via [scoop](https://scoop.sh/), the executable can then be found at `C:\Users\<username>\scoop\apps\buttery-taskbar\current\`
+
+```pwsh
+scoop bucket add CrypticButter https://github.com/CrypticButter/ScoopBucket
+scoop install CrypticButter/buttery-taskbar
+```
 
 ## Further details
 

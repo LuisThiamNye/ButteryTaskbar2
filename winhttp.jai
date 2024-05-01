@@ -28,4 +28,4 @@ WinHttpSendRequest :: (hRequest: HINTERNET, lpszHeaders: *u16, dwHeadersLength: 
 
 WinHttpReceiveResponse :: (hRequest: HINTERNET, lpReserved: *void) -> BOOL #foreign winhttp;
 
-winhttp :: #system_library "Winhttp";
+winhttp :: #library,system "Winhttp";

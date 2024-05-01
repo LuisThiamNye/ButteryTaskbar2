@@ -62,7 +62,7 @@ is_ui_initialised: bool;
 
 menu_loop :: () {
 	while loop:= 1 {
-		current_time = get_time();
+		current_time = seconds_since_init();
 		dt := cast(float)(current_time - last_time);
 		Clamp(*dt, 0, 0.1);
 		last_time = current_time;
@@ -121,7 +121,7 @@ open_menu_window :: (x_anchor: s32, y_anchor: s32) {
 	start_check_for_updates();
 
 	if !menu_hwnd {
-		class_name:= utf8_to_wide(menu_class_name);
+		class_name:= utf8_to_wide_new(menu_class_name,, temp);
 		wc: WNDCLASSEXW;
 		wc.cbSize = size_of(WNDCLASSEXW);
 		wc.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW | CS_DROPSHADOW | CS_NOCLOSE;
@@ -135,7 +135,7 @@ open_menu_window :: (x_anchor: s32, y_anchor: s32) {
 			terminate_program();
 		}
 
-		window_name:= utf8_to_wide(app_name);
+		window_name:= utf8_to_wide_new(app_name,, temp);
 		menu_hwnd = CreateWindowExW(
 			WS_EX_TOPMOST,
 			class_name,
@@ -166,7 +166,7 @@ set_window_frame_dark_mode :: (hwnd: HWND, dark: bool) {
 
 is_system_app_dark_mode_enabled :: () -> bool {
 	// Dynamically link because this API is undocumented
-	hUxTheme:= LoadLibraryW(utf8_to_wide("uxtheme.dll"));
+	hUxTheme:= LoadLibraryW(utf8_to_wide_new("uxtheme.dll",, temp));
 	if hUxTheme == null {
 		log_error("uxtheme.dll not found.");
 		return false;
@@ -395,12 +395,12 @@ config_file_name :: "config";
 
 save_config :: () {
 	programs_dir:= get_path_os_program_data();
-	data_dir:= join(programs_dir, "\\", app_name, allocator=temp);
+	data_dir:= join(programs_dir, "\\", app_name,, temp);
 	if !make_directory_if_it_does_not_exist(data_dir) {
 		log_error("Could not create data directory");
 		return;
 	}
-	config_path:= join(data_dir, "\\", config_file_name, allocator=temp);
+	config_path:= join(data_dir, "\\", config_file_name,, temp);
 	config:= Cold_Config.{
 		version = Cold_Config.VERSION,
 		enabled = config__enabled,
@@ -424,8 +424,8 @@ load_config :: () {
 	config__autohide_when_disabled = (res & ABS_AUTOHIDE) != 0;
 
 	programs_dir:= get_path_os_program_data();
-	data_dir:= join(programs_dir, "\\", app_name, allocator=temp);
-	config_path:= join(data_dir, "\\", config_file_name, allocator=temp);
+	data_dir:= join(programs_dir, "\\", app_name,, temp);
+	config_path:= join(data_dir, "\\", config_file_name,, temp);
 	data, ok := read_entire_file(config_path);
 	if !ok {
 		log("Failed to read config file %", config_path, flags=.WARNING);
@@ -459,7 +459,7 @@ load_config :: () {
 }
 
 open_url_in_browser :: (url: string) {
-	if xx ShellExecuteW(null, utf8_to_wide("open"), utf8_to_wide(url), null, null, SW_SHOWNORMAL) <= 32 {
+	if xx ShellExecuteW(null, utf8_to_wide_new("open",, temp), utf8_to_wide_new(url,, temp), null, null, SW_SHOWNORMAL) <= 32 {
 		log_error("Failed to open URL in browser.");
 	}
 }
