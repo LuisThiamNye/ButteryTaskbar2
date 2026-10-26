@@ -1,4 +1,12 @@
-# Buttery Taskbar 2
+# Buttery Taskbar 2 (Deprecated)
+
+> [!NOTE]
+> This project has been superseded by [Buttery Desktop](https://www.crypticbutter.com/buttery-desktop/), which has an improved design and additional features such as mouse pressure to reveal the taskbar. You can try it for free.
+
+> [!WARNING]
+> **This software is unmaintained and does not work properly on the latest versions of Windows 11.**
+>
+> In order to make development sustainable, all maintenance and support efforts are now focused on [Buttery Desktop](https://www.crypticbutter.com/buttery-desktop/). Please check it out to support my work.
 
 <p align="center">
 <img width="540" src="https://github.com/LuisThiamNye/miscellaneous-media/blob/8714fceb0cc01309fd2402f4887c2ee7e106656c/buttery-taskbar-feature-image.png">
